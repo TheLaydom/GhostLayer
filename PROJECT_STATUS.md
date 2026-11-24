@@ -7,7 +7,9 @@ Last updated: 2026-11-24 (Gemini/Antigravity)
 - **Repository:** `C:\Gh0stLi@arr` — unified monorepo with Git initialized (`agent/codex` imported from `GhostLayer-core.bundle` at `b1293cb`), `packages/core` + `extension/` wired together.
 - **Extension build & tests:** Verified live via PowerShell (`12/12` Vitest tests passing against `@ghostlayer/core`, `tsc --noEmit` + Vite 8.3.8 sidepanel + `background.js` + `content.js` 0 errors/0 warnings).
 - **On-Device AI (Gemini Nano):** Verified running on user's Chrome desktop. Updated `extension/src/services/localAi.ts` with `expectedInputs`/`expectedOutputs` (`languages: ['en']`), `responseConstraint` JSON Schema enforcement, and warm session `clone()`. Note: Brave strips Google's Optimization Guide / Gemini Nano runtime, so Nano is Chrome-desktop-only (Brave uses deterministic fail-safe fallback).
-- **Cloud AI (Firebase AI Logic + App Check):** User created Firebase project `gh0stlairr` (Spark free tier) and enabled Gemini Developer API + App Check enforcement. Populated gitignored `extension/.env.local` (verified via `git check-ignore`), removed Mock Mode per user request, and rebuilt `extension/dist`. Pending final App Check debug token registration in Firebase Console for live cloud send verification.
+- **Cloud AI (Firebase AI Logic + App Check):** **LIVE VERIFIED** on Firebase project `gh0stlairr` (`gemini-3.5-flash`, `1282ms` round-trip) with App Check enforced (`getToken()` verified), gitignored `extension/.env.local`, and Mock Mode removed.
+- **Brave + Chrome Support:** Unified single MV3 build auto-detects Chrome (real Gemini Nano with `responseConstraint` JSON Schema) vs Brave/other Chromium (`Local NER: HEURISTIC (BRAVE)` in `1.5ms`).
+- **GitHub Remote:** Synced and pushed to `https://github.com/TheLaydom/GhostLayer` (`main`).
 - **Auto-Guard AI Websites:** Content script active on ChatGPT, Claude, Gemini, AI Studio, Perplexity, Poe, and Grok with live amber draft count pill, one-click `Sanitize & Send`, toggleable `Autopilot` quiet-sanitize mode, and one-click in-page `Restore Replies`.
 
 ## T0.1 Environment Audit (Honest Findings)
