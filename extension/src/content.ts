@@ -326,23 +326,26 @@ function renderStatusBadge(): void {
         display: flex;
         align-items: center;
         gap: 6px;
-        padding: 5px 10px;
-        border-radius: 6px;
-        background: rgba(9, 9, 11, 0.94);
-        border: 1px solid ${hasLiveHits ? 'rgba(245, 158, 11, 0.75)' : 'rgba(16, 185, 129, 0.45)'};
-        color: ${hasLiveHits ? '#fde68a' : '#d4d4d8'};
-        font: 11px/1.2 system-ui, -apple-system, Segoe UI, sans-serif;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        padding: 6px 12px;
+        border-radius: 9999px;
+        background: rgba(12, 14, 20, 0.86);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid ${hasLiveHits ? 'rgba(255, 159, 10, 0.7)' : 'rgba(10, 132, 255, 0.5)'};
+        color: ${hasLiveHits ? '#FFE0A3' : '#E5F0FF'};
+        font: 500 11px/1.2 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
         cursor: pointer;
         user-select: none;
+        transition: border-color 0.15s ease, transform 0.15s ease;
       }
-      .pill:hover { border-color: ${hasLiveHits ? '#f59e0b' : 'rgba(16, 185, 129, 0.9)'}; color: #fff; }
+      .pill:hover { border-color: ${hasLiveHits ? '#FF9F0A' : '#38BDF8'}; color: #fff; transform: translateY(-1px); }
       .restore {
-        border-color: rgba(56, 189, 248, 0.5);
-        color: #bae6fd;
+        border-color: rgba(48, 209, 88, 0.5);
+        color: #A7F3D0;
       }
-      .restore:hover { border-color: rgba(56, 189, 248, 0.9); color: #fff; }
-      .dot { width: 7px; height: 7px; border-radius: 50%; background: ${hasLiveHits ? '#f59e0b' : '#10b981'}; }
+      .restore:hover { border-color: #30D158; color: #fff; }
+      .dot { width: 7px; height: 7px; border-radius: 50%; background: ${hasLiveHits ? '#FF9F0A' : '#0A84FF'}; box-shadow: 0 0 8px ${hasLiveHits ? '#FF9F0A' : '#0A84FF'}; }
     </style>
     <div class="bar">
       ${
@@ -468,35 +471,37 @@ function showInterceptModal(opts: {
       }
       .card {
         width: 100%;
-        max-width: 560px;
-        background: #09090b;
-        border: 1px solid #27272a;
-        border-radius: 10px;
-        color: #f4f4f5;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+        max-width: 540px;
+        background: rgba(16, 17, 23, 0.94);
+        backdrop-filter: blur(22px);
+        -webkit-backdrop-filter: blur(22px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 18px;
+        color: #f5f5f7;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
         overflow: hidden;
       }
       .head {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 12px 16px;
-        border-bottom: 1px solid #27272a;
-        background: #18181b;
+        padding: 14px 18px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.03);
       }
-      .title { font-size: 13px; font-weight: 600; color: #fca5a5; }
-      .sub { font-size: 11px; color: #a1a1aa; margin-top: 2px; }
-      .body { padding: 14px 16px; }
-      .label { font-size: 11px; color: #a1a1aa; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+      .title { font-size: 14px; font-weight: 600; color: #fff; letter-spacing: -0.01em; }
+      .sub { font-size: 11px; color: rgba(255, 255, 255, 0.55); margin-top: 2px; }
+      .body { padding: 14px 18px; }
+      .label { font-size: 10px; font-weight: 600; color: #7ac4ff; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
       .preview {
-        background: #111114;
-        border: 1px solid #27272a;
-        border-radius: 6px;
-        padding: 10px;
+        background: rgba(0, 0, 0, 0.7);
+        border: 1px solid rgba(10, 132, 255, 0.25);
+        border-radius: 12px;
+        padding: 12px;
         font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
         font-size: 12px;
         line-height: 1.5;
-        color: #a7f3d0;
+        color: #e0f2fe;
         max-height: 180px;
         overflow-y: auto;
         white-space: pre-wrap;
@@ -507,24 +512,24 @@ function showInterceptModal(opts: {
         flex-wrap: wrap;
         gap: 8px;
         justify-content: flex-end;
-        padding: 12px 16px;
-        border-top: 1px solid #27272a;
-        background: #111114;
+        padding: 12px 18px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(0, 0, 0, 0.35);
       }
       button {
-        border-radius: 6px;
-        padding: 7px 12px;
+        border-radius: 9999px;
+        padding: 7px 14px;
         font-size: 12px;
-        font-weight: 500;
+        font-weight: 600;
         cursor: pointer;
         border: 1px solid transparent;
       }
-      .btn-primary { background: #059669; color: #fff; }
-      .btn-primary:hover { background: #10b981; }
-      .btn-secondary { background: #18181b; color: #e4e4e7; border-color: #3f3f46; }
-      .btn-secondary:hover { background: #27272a; }
-      .btn-danger { background: transparent; color: #fca5a5; border-color: rgba(239, 68, 68, 0.35); }
-      .btn-danger:hover { background: rgba(127, 29, 29, 0.35); }
+      .btn-primary { background: #0a84ff; color: #fff; }
+      .btn-primary:hover { background: #3398ff; }
+      .btn-secondary { background: rgba(255, 255, 255, 0.08); color: #f5f5f7; border-color: rgba(255, 255, 255, 0.1); }
+      .btn-secondary:hover { background: rgba(255, 255, 255, 0.14); }
+      .btn-danger { background: transparent; color: #ff6961; border-color: rgba(255, 69, 58, 0.35); }
+      .btn-danger:hover { background: rgba(255, 69, 58, 0.15); }
     </style>
     <div class="backdrop">
       <div class="card" role="dialog" aria-modal="true" aria-label="GhostLayer Privacy Interception">

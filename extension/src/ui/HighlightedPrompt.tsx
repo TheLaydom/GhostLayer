@@ -6,19 +6,19 @@ interface HighlightedPromptProps {
 }
 
 const SEVERITY_STYLES: Record<Severity, string> = {
-  critical: 'bg-red-500/20 text-red-200 border-b border-red-400',
-  high: 'bg-amber-500/20 text-amber-200 border-b border-amber-400',
-  medium: 'bg-sky-500/20 text-sky-200 border-b border-sky-400',
+  critical: 'bg-[#FF453A]/20 text-[#FFD2CF] border-b border-[#FF453A]',
+  high: 'bg-[#FF9F0A]/20 text-[#FFE5B4] border-b border-[#FF9F0A]',
+  medium: 'bg-[#0A84FF]/25 text-[#CFE8FF] border-b border-[#38BDF8]',
 };
 
 export function HighlightedPrompt({ text, findings }: HighlightedPromptProps) {
   if (!text) {
-    return <p className="font-mono text-xs text-zinc-500">No text scanned yet.</p>;
+    return <p className="font-mono text-xs text-white/40">No text scanned yet.</p>;
   }
 
   if (findings.length === 0) {
     return (
-      <div className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-zinc-300">
+      <div className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-white/80">
         {text}
       </div>
     );
@@ -41,7 +41,7 @@ export function HighlightedPrompt({ text, findings }: HighlightedPromptProps) {
   }
 
   return (
-    <div className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-zinc-200">
+    <div className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-white/90">
       {parts.map((part) => {
         if (!part.finding) return <span key={part.key}>{part.content}</span>;
         const meta = CATEGORY_META[part.finding.type];
@@ -49,7 +49,7 @@ export function HighlightedPrompt({ text, findings }: HighlightedPromptProps) {
           <mark
             key={part.key}
             title={`${meta.label} -> ${part.finding.placeholder} (${part.finding.source})`}
-            className={`rounded-sm px-0.5 ${SEVERITY_STYLES[meta.severity]}`}
+            className={`rounded px-1 py-0.5 ${SEVERITY_STYLES[meta.severity]}`}
           >
             {part.content}
           </mark>

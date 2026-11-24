@@ -10,7 +10,6 @@ import {
   Lock,
   RefreshCw,
   Send,
-  Shield,
   SlidersHorizontal,
   Trash2,
 } from 'lucide-react';
@@ -28,6 +27,7 @@ import { createExtensionServices, type CloudResult } from './services/firebase';
 import type { LocalAiAvailability, LocalAiScanResult } from './services/localAi';
 import { loadSavedPolicy, savePolicy } from './services/storage';
 import { AuditLog, type AuditEntry } from './ui/AuditLog';
+import { GhostLogo } from './ui/GhostLogo';
 import { HighlightedPrompt } from './ui/HighlightedPrompt';
 import { PolicyDrawer } from './ui/PolicyDrawer';
 
@@ -328,18 +328,16 @@ export function App() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100">
-      {/* Header */}
-      <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+    <div className="flex min-h-screen flex-col bg-black text-[#F5F5F7]">
+      {/* iOS Translucent Glass Header */}
+      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/[0.08] bg-black/80 px-4 py-3 backdrop-blur-xl">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded border border-emerald-500/40 bg-emerald-500/10">
-            <Shield className="h-4 w-4 text-emerald-400" />
-          </div>
+          <GhostLogo size={32} />
           <div>
-            <h1 className="text-sm font-semibold tracking-tight text-zinc-100">
+            <h1 className="text-[15px] font-semibold tracking-[-0.02em] text-white">
               GhostLayer
             </h1>
-            <p className="text-[11px] text-zinc-400">Local-First AI Privacy Firewall</p>
+            <p className="text-[11px] text-white/45">On-Device AI Firewall</p>
           </div>
         </div>
 
@@ -347,123 +345,118 @@ export function App() {
           <button
             type="button"
             onClick={handleResetVault}
-            className="flex items-center gap-1 rounded border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-300 hover:border-zinc-700 hover:text-zinc-100"
+            title="Reset session vault"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.08] bg-[#16171D] text-white/65 transition hover:bg-white/10 hover:text-white"
           >
             <Trash2 className="h-3.5 w-3.5" />
-            <span>Reset Vault</span>
           </button>
           <button
             type="button"
             onClick={() => setPolicyOpen(true)}
-            className="flex items-center gap-1 rounded border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-300 hover:border-zinc-700 hover:text-zinc-100"
+            className="flex h-8 items-center gap-1.5 rounded-full border border-white/[0.08] bg-[#16171D] px-3 text-xs font-medium text-white/85 transition hover:bg-white/10 hover:text-white"
           >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
+            <SlidersHorizontal className="h-3.5 w-3.5 text-[#38BDF8]" />
             <span>Policy</span>
           </button>
         </div>
       </header>
 
-      {/* Processing Boundary Indicators */}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-zinc-800/80 bg-zinc-900/40 px-4 py-2 text-[11px]">
-        <div className="flex items-center gap-1.5">
-          <Lock className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
-          <span className="text-zinc-400">Rules:</span>
-          <span className="font-mono text-emerald-300">LOCAL</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Cpu
-            className={`h-3.5 w-3.5 shrink-0 ${
-              localAiStatus.status === 'ready' ? 'text-emerald-400' : 'text-amber-400'
-            }`}
-          />
-          <span className="text-zinc-400">
-            {localAiStatus.engine === 'local-heuristic' ? 'Local NER:' : 'Nano:'}
-          </span>
-          <span
-            className={`font-mono uppercase ${
-              localAiStatus.status === 'ready' ? 'text-emerald-300' : 'text-amber-300'
-            }`}
-          >
+      {/* Compact iOS Pill Telemetry Bar */}
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-white/[0.06] bg-[#090A0E] px-4 py-2 text-[10px]">
+        <span className="inline-flex items-center gap-1 rounded-full border border-[#30D158]/30 bg-[#30D158]/10 px-2 py-0.5 font-medium text-[#70F095]">
+          <Lock className="h-2.5 w-2.5" />
+          <span>Local Rules</span>
+        </span>
+
+        <span
+          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-medium ${
+            localAiStatus.status === 'ready'
+              ? 'border-[#0A84FF]/35 bg-[#0A84FF]/15 text-[#7AC4FF]'
+              : 'border-[#FF9F0A]/35 bg-[#FF9F0A]/15 text-[#FFD27D]'
+          }`}
+        >
+          <Cpu className="h-2.5 w-2.5" />
+          <span>
             {localAiStatus.engine === 'local-heuristic'
-              ? `HEURISTIC (${localAiStatus.browserName ?? 'Brave'})`
-              : localAiStatus.status}
+              ? `Heuristic (${localAiStatus.browserName ?? 'Brave'})`
+              : `Nano ${localAiStatus.status}`}
           </span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Cloud
-            className={`h-3.5 w-3.5 shrink-0 ${
-              policy.localOnlyMode
-                ? 'text-zinc-500'
-                : services.telemetry.firebaseConfigured
-                  ? 'text-sky-400'
-                  : 'text-zinc-500'
-            }`}
-          />
-          <span className="text-zinc-400">Cloud:</span>
-          <span className="truncate font-mono text-zinc-200">
+        </span>
+
+        <span
+          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-medium ${
+            policy.localOnlyMode || !services.telemetry.firebaseConfigured
+              ? 'border-white/10 bg-white/[0.05] text-white/50'
+              : 'border-[#38BDF8]/30 bg-[#38BDF8]/10 text-[#93DCFF]'
+          }`}
+        >
+          <Cloud className="h-2.5 w-2.5" />
+          <span>
             {policy.localOnlyMode
-              ? 'LOCAL ONLY'
+              ? 'Local Only'
               : services.telemetry.firebaseConfigured
                 ? services.telemetry.cloudModel
-                : 'NOT CONNECTED'}
+                : 'Cloud Off'}
           </span>
-        </div>
+        </span>
       </div>
 
-      {/* Main */}
-      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-4 p-4">
+      {/* Main Content */}
+      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-3.5 p-3.5">
         {selectionNotice && (
-          <div className="flex items-center justify-between rounded border border-emerald-500/30 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-200">
+          <div className="flex items-center justify-between rounded-2xl border border-[#0A84FF]/35 bg-[#0A84FF]/15 px-3.5 py-2 text-xs text-[#CFE8FF]">
             <span>{selectionNotice}</span>
             <button
               type="button"
               onClick={() => setSelectionNotice(null)}
-              className="text-emerald-400 hover:text-emerald-200"
+              className="font-medium text-[#60A5FA] hover:text-white"
             >
-              Dismiss
+              Done
             </button>
           </div>
         )}
 
-        {/* Step 1: Draft */}
-        <section className="rounded border border-zinc-800 bg-zinc-900/40 p-3">
+        {/* Card 1: Prompt Composer */}
+        <section className="rounded-2xl border border-white/[0.08] bg-[#14151B] p-3.5 shadow-[0_8px_30px_rgba(0,0,0,0.45)]">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <label htmlFor="prompt-input" className="text-xs font-medium text-zinc-200">
-              1. Prompt Input (Processed On-Device)
+            <label
+              htmlFor="prompt-input"
+              className="text-[12px] font-semibold tracking-tight text-white/90"
+            >
+              Prompt
             </label>
-            <span className="font-mono text-[10px] text-zinc-500">
+            <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium text-white/50">
               {policy.autoGuardAiSites
                 ? policy.autoSanitizeSilently
-                  ? 'AI Sites: Autopilot'
-                  : 'AI Sites: Guard ON'
-                : 'AI Sites: OFF'}
+                  ? 'Web Autopilot ON'
+                  : 'Web Guard ON'
+                : 'Web Guard OFF'}
             </span>
           </div>
 
           <textarea
             id="prompt-input"
-            rows={5}
+            rows={4}
             value={prompt}
             onChange={(e) => updatePrompt(e.target.value)}
-            placeholder="Paste text, logs, code, or emails to sanitize locally before sending to AI..."
-            className="w-full resize-y rounded border border-zinc-800 bg-zinc-950 p-2.5 font-mono text-xs leading-relaxed text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500/60 focus:outline-none"
+            placeholder="Type or paste sensitive text, emails, or code — redacted locally before anything leaves your device..."
+            className="w-full resize-y rounded-xl border border-white/[0.07] bg-black/75 p-3 font-mono text-xs leading-relaxed text-white placeholder:text-white/30 focus:border-[#0A84FF]/70 focus:outline-none focus:ring-2 focus:ring-[#0A84FF]/20"
           />
 
           {livePreviewCounts.length > 0 && (
-            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
-              <span className="text-zinc-500">Live hits:</span>
+            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
               {livePreviewCounts.map(({ type, count }) => {
                 const meta = CATEGORY_META[type];
                 const pillTone =
                   meta.severity === 'critical'
-                    ? 'border-red-500/40 bg-red-950/50 text-red-200'
+                    ? 'border-[#FF453A]/40 bg-[#FF453A]/15 text-[#FFB4AF]'
                     : meta.severity === 'high'
-                      ? 'border-amber-500/40 bg-amber-950/40 text-amber-200'
-                      : 'border-sky-500/40 bg-sky-950/40 text-sky-200';
+                      ? 'border-[#FF9F0A]/40 bg-[#FF9F0A]/15 text-[#FFE0A3]'
+                      : 'border-[#0A84FF]/40 bg-[#0A84FF]/15 text-[#A8D5FF]';
                 return (
                   <span
                     key={type}
-                    className={`rounded border px-1.5 py-0.5 font-mono text-[10px] ${pillTone}`}
+                    className={`rounded-full border px-2 py-0.5 font-mono text-[10px] ${pillTone}`}
                   >
                     {count} {meta.label}
                   </span>
@@ -473,43 +466,43 @@ export function App() {
           )}
 
           {scanError && (
-            <div className="mt-2 rounded border border-red-500/40 bg-red-950/40 p-2 text-xs text-red-200">
+            <div className="mt-2.5 rounded-xl border border-[#FF453A]/40 bg-[#FF453A]/15 p-2.5 text-xs text-[#FFD2CF]">
               {scanError}
             </div>
           )}
 
-          <div className="mt-2.5 flex items-center justify-end">
+          <div className="mt-3 flex items-center justify-end">
             <button
               type="button"
               onClick={handleScan}
               disabled={isScanning || !prompt.trim()}
-              className="flex items-center gap-1.5 rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-full bg-[#0A84FF] px-4 py-2 text-xs font-semibold text-white shadow-[0_4px_16px_rgba(10,132,255,0.35)] transition hover:bg-[#3398FF] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isScanning ? 'animate-spin' : ''}`} />
-              <span>{isScanning ? 'Scanning Locally...' : 'Inspect & Sanitize'}</span>
+              <span>{isScanning ? 'Scanning...' : 'Inspect & Sanitize'}</span>
             </button>
           </div>
         </section>
 
-        {/* Step 2: Inspection & Wire Preview */}
+        {/* Card 2: Inspection & Wire Preview */}
         {snapshot && (
-          <section className="space-y-3 rounded border border-zinc-800 bg-zinc-900/40 p-3">
+          <section className="space-y-3 rounded-2xl border border-white/[0.08] bg-[#14151B] p-3.5 shadow-[0_8px_30px_rgba(0,0,0,0.45)]">
             <div className="flex flex-wrap items-center justify-between gap-1">
-              <h2 className="text-xs font-medium text-zinc-200">
-                2. Local Findings &amp; Outgoing Preview
+              <h2 className="text-[12px] font-semibold tracking-tight text-white/90">
+                Outgoing Review
               </h2>
-              <span className="font-mono text-[11px] text-zinc-400">
-                {snapshot.review.findings.length} finding(s) · rules{' '}
-                {snapshot.ruleLatencyMs}ms · nano {snapshot.localAi.latencyMs}ms
+              <span className="font-mono text-[10px] text-white/45">
+                {snapshot.review.findings.length} finding(s) · {snapshot.ruleLatencyMs}ms
+                rules · {snapshot.localAi.latencyMs}ms local
               </span>
             </div>
 
             {blockerMessage && (
-              <div className="flex items-start gap-2 rounded border border-red-500/40 bg-red-950/40 p-2.5 text-xs text-red-200">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+              <div className="flex items-start gap-2.5 rounded-xl border border-[#FF453A]/40 bg-[#FF453A]/15 p-3 text-xs text-[#FFD2CF]">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#FF453A]" />
                 <div className="flex-1">
-                  <div className="font-medium">Cloud Transmission Blocked (Fail-Safe)</div>
-                  <p className="mt-0.5 text-red-200/90">{blockerMessage}</p>
+                  <div className="font-semibold text-white">Transmission Blocked</div>
+                  <p className="mt-0.5 text-white/80">{blockerMessage}</p>
                   {snapshot.review.blocked === 'local-ai-unavailable' &&
                     policy.blockIfLocalAiUnavailable && (
                       <button
@@ -517,33 +510,20 @@ export function App() {
                         onClick={() =>
                           updatePolicy({ ...policy, blockIfLocalAiUnavailable: false })
                         }
-                        className="mt-2 rounded border border-red-400/40 bg-red-900/40 px-2 py-1 text-[11px] font-medium text-red-100 hover:bg-red-900/70"
+                        className="mt-2 rounded-full bg-white/15 px-3 py-1 text-[11px] font-medium text-white transition hover:bg-white/25"
                       >
-                        Allow Deterministic-Only Fallback (Requires Re-Scan)
+                        Allow Deterministic Fallback
                       </button>
                     )}
                 </div>
               </div>
             )}
 
-            {!policy.blockIfLocalAiUnavailable &&
-              snapshot.localAi.status !== 'ready' &&
-              snapshot.review.blocked === null && (
-                <div className="flex items-start gap-2 rounded border border-amber-500/30 bg-amber-950/30 p-2.5 text-xs text-amber-200">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-                  <p>
-                    Deterministic-only fallback is active because Gemini Nano is{' '}
-                    {snapshot.localAi.status}. Contextual entities like personal names may
-                    not be detected.
-                  </p>
-                </div>
-              )}
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded border border-zinc-800 bg-zinc-950 p-2.5">
-                <div className="mb-1.5 flex items-center justify-between text-[11px]">
-                  <span className="font-medium text-zinc-300">Detected Locally</span>
-                  <span className="font-mono text-emerald-400">ON-DEVICE ONLY</span>
+            <div className="grid gap-2.5 md:grid-cols-2">
+              <div className="rounded-xl border border-white/[0.07] bg-black/70 p-3">
+                <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-wider">
+                  <span className="font-semibold text-white/50">On-Device Only</span>
+                  <span className="font-mono text-[#30D158]">Private</span>
                 </div>
                 <HighlightedPrompt
                   text={snapshot.original}
@@ -551,48 +531,46 @@ export function App() {
                 />
               </div>
 
-              <div className="rounded border border-zinc-800 bg-zinc-950 p-2.5">
-                <div className="mb-1.5 flex items-center justify-between text-[11px]">
-                  <span className="font-medium text-zinc-300">
-                    Exactly What Will Be Sent
-                  </span>
+              <div className="rounded-xl border border-[#0A84FF]/25 bg-[#07111F] p-3">
+                <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-wider">
+                  <span className="font-semibold text-[#7AC4FF]">Wire Preview</span>
                   <button
                     type="button"
                     onClick={handleCopySanitized}
-                    className="flex items-center gap-1 text-zinc-400 hover:text-zinc-200"
+                    className="flex items-center gap-1 normal-case text-white/60 transition hover:text-white"
                   >
                     <Copy className="h-3 w-3" />
                     <span>{copied ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
-                <div className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-emerald-200">
+                <div className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-[#E0F2FE]">
                   {snapshot.review.sanitized}
                 </div>
               </div>
             </div>
 
             {snapshot.review.mappings.length > 0 && (
-              <div className="overflow-x-auto rounded border border-zinc-800">
+              <div className="overflow-x-auto rounded-xl border border-white/[0.07] bg-black/50">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-zinc-950 text-[10px] uppercase tracking-wider text-zinc-400">
+                  <thead className="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-white/40">
                     <tr>
-                      <th className="px-2.5 py-1.5">Token</th>
-                      <th className="px-2.5 py-1.5">Source</th>
-                      <th className="px-2.5 py-1.5">Local Vault</th>
+                      <th className="px-3 py-2">Token</th>
+                      <th className="px-3 py-2">Source</th>
+                      <th className="px-3 py-2">Vault</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-800/80 bg-zinc-900/30 font-mono text-[11px]">
+                  <tbody className="divide-y divide-white/[0.05] font-mono text-[11px]">
                     {snapshot.review.mappings.map((m) => {
                       const isOpen = Boolean(revealed[m.placeholder]);
                       return (
                         <tr key={m.placeholder}>
-                          <td className="px-2.5 py-1.5 text-emerald-300 whitespace-nowrap">
+                          <td className="whitespace-nowrap px-3 py-2 text-[#60A5FA]">
                             {m.placeholder}
                           </td>
-                          <td className="px-2.5 py-1.5 text-zinc-400 whitespace-nowrap">
+                          <td className="whitespace-nowrap px-3 py-2 text-white/45">
                             {m.source}
                           </td>
-                          <td className="px-2.5 py-1.5 text-zinc-200">
+                          <td className="px-3 py-2 text-white/85">
                             <div className="flex items-center justify-between gap-2">
                               <span className="max-w-[140px] truncate">
                                 {isOpen ? m.original : maskPreview(m.original)}
@@ -606,7 +584,7 @@ export function App() {
                                   }))
                                 }
                                 aria-label={`Reveal ${m.placeholder}`}
-                                className="text-zinc-500 hover:text-zinc-200 shrink-0"
+                                className="shrink-0 text-white/40 transition hover:text-white"
                               >
                                 {isOpen ? (
                                   <EyeOff className="h-3.5 w-3.5" />
@@ -625,19 +603,16 @@ export function App() {
             )}
 
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-              <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
+              <div className="flex items-center gap-1.5 text-[11px] text-white/50">
                 {canTransmit ? (
                   <>
-                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
-                    <span>Sanitized payload verified. Original values stay local.</span>
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[#30D158]" />
+                    <span>Verified. Raw values stay local.</span>
                   </>
                 ) : !services.telemetry.firebaseConfigured ? (
-                  <span>
-                    Copy the sanitized prompt above, or connect Firebase AI Logic in{' '}
-                    <code className="text-zinc-300">.env.local</code> for built-in Gemini.
-                  </span>
+                  <span>Copy sanitized text above or connect Firebase AI Logic.</span>
                 ) : (
-                  <span>Resolve blockers above or copy the sanitized prompt manually.</span>
+                  <span>Resolve blockers above before sending.</span>
                 )}
               </div>
 
@@ -646,65 +621,66 @@ export function App() {
                   type="button"
                   onClick={handleTransmit}
                   disabled={!canTransmit}
-                  className="flex items-center gap-1.5 rounded bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-xs font-semibold text-black shadow-sm transition hover:bg-white/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35"
                 >
                   <Send className="h-3.5 w-3.5" />
-                  <span>
-                    {isSending ? 'Transmitting...' : 'Send Sanitized to Gemini'}
-                  </span>
+                  <span>{isSending ? 'Sending...' : 'Send to Gemini'}</span>
                 </button>
               )}
             </div>
 
             {sendError && (
-              <div className="rounded border border-red-500/40 bg-red-950/40 p-2.5 text-xs text-red-200">
+              <div className="rounded-xl border border-[#FF453A]/40 bg-[#FF453A]/15 p-2.5 text-xs text-[#FFD2CF]">
                 {sendError}
               </div>
             )}
           </section>
         )}
 
-        {/* Step 3: Response & Local Restoration */}
+        {/* Card 3: Cloud Response & Local Restoration */}
         {cloudOutput && (
-          <section className="space-y-2.5 rounded border border-zinc-800 bg-zinc-900/40 p-3">
-            <div className="flex items-center justify-between">
+          <section className="space-y-3 rounded-2xl border border-white/[0.08] bg-[#14151B] p-3.5 shadow-[0_8px_30px_rgba(0,0,0,0.45)]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h2 className="text-xs font-medium text-zinc-200">
-                  3. Response ({cloudOutput.cloud.model} · {cloudOutput.cloud.latencyMs}ms)
+                <h2 className="text-[12px] font-semibold tracking-tight text-white/90">
+                  Response · {cloudOutput.cloud.model}
                 </h2>
-                <p className="text-[11px] text-zinc-400">
-                  Restored {cloudOutput.restoredCount} safe placeholder(s) locally.
+                <p className="text-[11px] text-white/45">
+                  {cloudOutput.cloud.latencyMs}ms · restored {cloudOutput.restoredCount}{' '}
+                  locally
                   {cloudOutput.skipped.length > 0 &&
-                    ` Kept ${cloudOutput.skipped.join(', ')} redacted.`}
+                    ` · kept ${cloudOutput.skipped.join(', ')} redacted`}
                 </p>
               </div>
-              <div className="flex items-center gap-1 rounded border border-zinc-800 bg-zinc-950 p-0.5 text-[11px]">
+
+              {/* iOS Segmented Control */}
+              <div className="flex items-center rounded-full border border-white/[0.08] bg-black/70 p-0.5 text-[11px]">
                 <button
                   type="button"
                   onClick={() => setResponseTab('restored')}
-                  className={`rounded px-2 py-1 ${
+                  className={`rounded-full px-3 py-1 font-medium transition ${
                     responseTab === 'restored'
-                      ? 'bg-zinc-800 text-zinc-100'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                      ? 'bg-[#0A84FF] text-white'
+                      : 'text-white/55 hover:text-white'
                   }`}
                 >
-                  Restored (Local)
+                  Restored
                 </button>
                 <button
                   type="button"
                   onClick={() => setResponseTab('raw')}
-                  className={`rounded px-2 py-1 ${
+                  className={`rounded-full px-3 py-1 font-medium transition ${
                     responseTab === 'raw'
-                      ? 'bg-zinc-800 text-zinc-100'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                      ? 'bg-[#0A84FF] text-white'
+                      : 'text-white/55 hover:text-white'
                   }`}
                 >
-                  Raw Cloud Output
+                  Raw Cloud
                 </button>
               </div>
             </div>
 
-            <div className="whitespace-pre-wrap rounded border border-zinc-800 bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-100">
+            <div className="whitespace-pre-wrap rounded-xl border border-white/[0.07] bg-black/70 p-3 text-[13px] leading-relaxed text-white/90">
               {responseTab === 'restored'
                 ? cloudOutput.restoredText
                 : cloudOutput.cloud.rawText}
