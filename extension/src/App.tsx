@@ -25,7 +25,14 @@ import {
 } from './core-adapter';
 import { createExtensionServices, type CloudResult } from './services/firebase';
 import type { LocalAiAvailability, LocalAiScanResult } from './services/localAi';
-import { loadSavedPolicy, savePolicy } from './services/storage';
+import {
+  createDefaultAppearance,
+  loadSavedAppearance,
+  loadSavedPolicy,
+  saveAppearance,
+  savePolicy,
+  type AppearanceSettings,
+} from './services/storage';
 import { AuditLog, type AuditEntry } from './ui/AuditLog';
 import { GhostLogo } from './ui/GhostLogo';
 import { HighlightedPrompt } from './ui/HighlightedPrompt';
@@ -56,6 +63,9 @@ export function App() {
 
   const [prompt, setPrompt] = useState('');
   const [policy, setPolicy] = useState<Policy>(() => createDefaultPolicy());
+  const [appearance, setAppearance] = useState<AppearanceSettings>(() =>
+    createDefaultAppearance(),
+  );
   const [policyOpen, setPolicyOpen] = useState(false);
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
 
@@ -113,6 +123,9 @@ export function App() {
         setSnapshot(null);
       }
     });
+    loadSavedAppearance().then((saved) => {
+      if (mounted) setAppearance(saved);
+    });
     services.localScanner.checkStatus().then((st) => {
       if (mounted) setLocalAiStatus(st);
     });
@@ -162,6 +175,11 @@ export function App() {
     invalidateApproval();
     setPolicy(next);
     void savePolicy(next);
+  };
+
+  const updateAppearance = (next: AppearanceSettings) => {
+    setAppearance(next);
+    void saveAppearance(next);
   };
 
   const updatePrompt = (next: string) => {
@@ -327,10 +345,36 @@ export function App() {
     }
   };
 
+  const bgSrc = appearance.customBackgroundDataUrl ?? '/backgrounds/default-bg.png';
+  const rootBgClass =
+    appearance.style === 'frost-slate'
+      ? 'bg-[#0B1120]'
+      : 'bg-black';
+  const cardSurfaceClass =
+    appearance.style === 'ios-glass'
+      ? 'border-white/[0.11] bg-[#0D0F16]/75 backdrop-blur-xl'
+      : appearance.style === 'frost-slate'
+        ? 'border-sky-300/15 bg-[#121B2E]/95'
+        : 'border-white/[0.08] bg-[#14151B]';
+
   return (
-    <div className="flex min-h-screen flex-col bg-black text-[#F5F5F7]">
+    <div className={`relative flex min-h-screen flex-col ${rootBgClass} text-[#F5F5F7]`}>
+      {/* Optional Frosted PNG Background Layer (Default: iOS Glass) */}
+      {appearance.style === 'ios-glass' && (
+        <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+          <img
+            src={bgSrc}
+            alt=""
+            aria-hidden="true"
+            style={{ opacity: appearance.backgroundOpacity / 100 }}
+            className="h-full w-full scale-105 object-cover object-center blur-[2px] saturate-110"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/45 to-black/85" />
+        </div>
+      )}
+
       {/* iOS Translucent Glass Header */}
-      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/[0.08] bg-black/80 px-4 py-3 backdrop-blur-xl">
+      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/[0.08] bg-black/70 px-4 py-3 backdrop-blur-xl">
         <div className="flex items-center gap-2.5">
           <GhostLogo size={32} />
           <div>
@@ -362,7 +406,7 @@ export function App() {
       </header>
 
       {/* Compact iOS Pill Telemetry Bar */}
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-white/[0.06] bg-[#090A0E] px-4 py-2 text-[10px]">
+      <div className="relative z-10 flex flex-wrap items-center gap-1.5 border-b border-white/[0.06] bg-black/55 px-4 py-2 text-[10px] backdrop-blur-md">
         <span className="inline-flex items-center gap-1 rounded-full border border-[#30D158]/30 bg-[#30D158]/10 px-2 py-0.5 font-medium text-[#70F095]">
           <Lock className="h-2.5 w-2.5" />
           <span>Local Rules</span>
@@ -402,7 +446,7 @@ export function App() {
       </div>
 
       {/* Main Content */}
-      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-3.5 p-3.5">
+      <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col gap-3.5 p-3.5">
         {selectionNotice && (
           <div className="flex items-center justify-between rounded-2xl border border-[#0A84FF]/35 bg-[#0A84FF]/15 px-3.5 py-2 text-xs text-[#CFE8FF]">
             <span>{selectionNotice}</span>
@@ -417,7 +461,7 @@ export function App() {
         )}
 
         {/* Card 1: Prompt Composer */}
-        <section className="rounded-2xl border border-white/[0.08] bg-[#14151B] p-3.5 shadow-[0_8px_30px_rgba(0,0,0,0.45)]">
+        <section className={`rounded-2xl border p-3.5 shadow-[0_8px_30px_rgba(0,0,0,0.45)] ${cardSurfaceClass}`}>
           <div className="mb-2 flex items-center justify-between gap-2">
             <label
               htmlFor="prompt-input"
@@ -486,7 +530,7 @@ export function App() {
 
         {/* Card 2: Inspection & Wire Preview */}
         {snapshot && (
-          <section className="space-y-3 rounded-2xl border border-white/[0.08] bg-[#14151B] p-3.5 shadow-[0_8px_30px_rgba(0,0,0,0.45)]">
+          <section className={`space-y-3 rounded-2xl border p-3.5 shadow-[0_8px_30px_rgba(0,0,0,0.45)] ${cardSurfaceClass}`}>
             <div className="flex flex-wrap items-center justify-between gap-1">
               <h2 className="text-[12px] font-semibold tracking-tight text-white/90">
                 Outgoing Review
@@ -639,7 +683,7 @@ export function App() {
 
         {/* Card 3: Cloud Response & Local Restoration */}
         {cloudOutput && (
-          <section className="space-y-3 rounded-2xl border border-white/[0.08] bg-[#14151B] p-3.5 shadow-[0_8px_30px_rgba(0,0,0,0.45)]">
+          <section className={`space-y-3 rounded-2xl border p-3.5 shadow-[0_8px_30px_rgba(0,0,0,0.45)] ${cardSurfaceClass}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 className="text-[12px] font-semibold tracking-tight text-white/90">
@@ -694,8 +738,10 @@ export function App() {
       <PolicyDrawer
         open={policyOpen}
         policy={policy}
+        appearance={appearance}
         onClose={() => setPolicyOpen(false)}
         onChange={updatePolicy}
+        onAppearanceChange={updateAppearance}
       />
     </div>
   );
