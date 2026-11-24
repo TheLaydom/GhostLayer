@@ -1,0 +1,19 @@
+{
+  "name": "ghostlayer",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "extension"
+  ],
+  "scripts": {
+    "build": "tsc -p packages/core",
+    "lint": "tsc -p packages/core --noEmit && tsc -p packages/core/tsconfig.test.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "typescript": "5.9.3",
+    "vitest": "4.1.12"
+  }
+}
