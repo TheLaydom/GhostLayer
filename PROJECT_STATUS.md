@@ -19,3 +19,7 @@ The earlier single-package prototype is separate from this TypeScript handoff. I
 1. Initialize Git in the shared directory with permission, preserving Gemini's files. Bring the staged core, root build setup, and license into the shared checkout. Reconcile the task and status changes with the existing shared files.
 2. Gemini integrates the core's session and reviewed-text gate and addresses the extension fixes. Record mock browser evidence and then verify Firebase and Nano with synthetic data.
 3. Before live verification, configure a Firebase project with App Check. Keep debug credentials and debug builds private. Review production attestation before distribution.
+
+## GitHub development snapshot
+
+This repository includes the verified TypeScript core and the latest Antigravity extension source as separate workspaces. The extension still uses its transitional adapter. Core tests passed with Vite pinned in the root workspace. The extension build fails with its declared Firebase 11 dependency, which lacks the hybrid inference API. Its test runner also hit a Windows child-process permission error on this host. Dependency audit flagged seven advisories in the combined tree. Browser and live Firebase checks remain open.

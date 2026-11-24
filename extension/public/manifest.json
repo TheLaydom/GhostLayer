@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "GhostLayer — AI Privacy Firewall",
+  "version": "0.1.0",
+  "description": "Local-first privacy firewall for AI prompts. Redacts sensitive data on-device before calling cloud Gemini via Firebase AI Logic.",
+  "permissions": ["sidePanel", "storage", "contextMenus"],
+  "action": {
+    "default_title": "Open GhostLayer"
+  },
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
