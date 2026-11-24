@@ -5,31 +5,28 @@
   "description": "GhostLayer Chrome Manifest V3 Side Panel extension — local-first AI privacy firewall.",
   "type": "module",
   "scripts": {
-    "dev": "npm --prefix .. run build && vite",
-    "build": "npm --prefix .. run build && tsc --noEmit && vite build",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build && vite build --config vite.content.config.ts",
     "preview": "vite preview",
-    "test": "npm --prefix .. run build && vitest run",
-    "typecheck": "npm --prefix .. run build && tsc --noEmit"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "firebase": "^13.4.0",
     "lucide-react": "^0.511.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "@firebase/app": "0.16.7",
-    "@firebase/app-check": "0.13.2",
-    "@firebase/ai": "3.1.0",
-    "@ghostlayer/core": "0.1.0"
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.320",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
-    "@vitejs/plugin-react": "6.0.3",
+    "@vitejs/plugin-react": "^6.0.0",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.8.3",
-    "vite": "8.3.8",
-    "vitest": "4.1.12"
+    "typescript": "^5.9.3",
+    "vite": "^8.3.8",
+    "vitest": "^4.1.12"
   }
 }

@@ -40,6 +40,8 @@ function mergePolicy(defaults: Policy, saved: Partial<Policy>): Policy {
     localOnlyMode: saved.localOnlyMode ?? defaults.localOnlyMode,
     blockIfLocalAiUnavailable:
       saved.blockIfLocalAiUnavailable ?? defaults.blockIfLocalAiUnavailable,
+    autoGuardAiSites: saved.autoGuardAiSites ?? defaults.autoGuardAiSites,
+    autoSanitizeSilently: saved.autoSanitizeSilently ?? defaults.autoSanitizeSilently,
     enabledCategories: {
       ...defaults.enabledCategories,
       ...(saved.enabledCategories ?? {}),

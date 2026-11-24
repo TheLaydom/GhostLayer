@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "GhostLayer — AI Privacy Firewall",
   "version": "0.1.0",
-  "description": "Local-first privacy firewall for AI prompts. Redacts sensitive data on-device before calling cloud Gemini via Firebase AI Logic.",
+  "description": "Local-first privacy firewall for AI prompts. Auto-guards AI chat sites and redacts sensitive data on-device before calling cloud Gemini via Firebase AI Logic.",
   "permissions": ["sidePanel", "storage", "contextMenus"],
   "action": {
     "default_title": "Open GhostLayer"
@@ -14,6 +14,23 @@
     "service_worker": "background.js",
     "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*",
+        "https://aistudio.google.com/*",
+        "https://perplexity.ai/*",
+        "https://www.perplexity.ai/*",
+        "https://poe.com/*",
+        "https://grok.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   }

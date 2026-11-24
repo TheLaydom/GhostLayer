@@ -58,19 +58,66 @@ export function PolicyDrawer({ open, policy, onClose, onChange }: PolicyDrawerPr
           <section className="space-y-3 rounded border border-zinc-800 bg-zinc-900/50 p-3">
             <label className="flex cursor-pointer items-start justify-between gap-3">
               <div>
-                <div className="font-medium text-zinc-100">Local-Only Mode</div>
+                <div className="font-medium text-zinc-100">
+                  Auto-Guard AI Websites (ChatGPT, Claude, Gemini, etc.)
+                </div>
                 <p className="mt-0.5 text-zinc-400">
-                  Never transmit prompts to cloud AI. Use GhostLayer strictly for local
-                  redaction and copy-paste sanitization.
+                  Automatically scan prompts locally before sending on supported AI sites
+                  and pause submission if sensitive data is detected.
                 </p>
               </div>
               <input
                 type="checkbox"
-                checked={policy.localOnlyMode}
-                onChange={(e) => onChange({ ...policy, localOnlyMode: e.target.checked })}
+                checked={policy.autoGuardAiSites}
+                onChange={(e) =>
+                  onChange({ ...policy, autoGuardAiSites: e.target.checked })
+                }
                 className="mt-1 h-4 w-4 accent-emerald-500"
               />
             </label>
+
+            {policy.autoGuardAiSites && (
+              <div className="border-t border-zinc-800 pt-3">
+                <label className="flex cursor-pointer items-start justify-between gap-3">
+                  <div>
+                    <div className="font-medium text-zinc-100">
+                      Autopilot: Quietly Sanitize &amp; Send
+                    </div>
+                    <p className="mt-0.5 text-zinc-400">
+                      Automatically replace detected secrets and submit without a popup
+                      modal, showing a brief toast instead. You can still restore safe
+                      placeholders in AI replies from the bottom-right Guard bar.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={policy.autoSanitizeSilently}
+                    onChange={(e) =>
+                      onChange({ ...policy, autoSanitizeSilently: e.target.checked })
+                    }
+                    className="mt-1 h-4 w-4 accent-emerald-500"
+                  />
+                </label>
+              </div>
+            )}
+
+            <div className="border-t border-zinc-800 pt-3">
+              <label className="flex cursor-pointer items-start justify-between gap-3">
+                <div>
+                  <div className="font-medium text-zinc-100">Local-Only Mode</div>
+                  <p className="mt-0.5 text-zinc-400">
+                    Never transmit prompts to cloud AI. Use GhostLayer strictly for local
+                    redaction and copy-paste sanitization.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={policy.localOnlyMode}
+                  onChange={(e) => onChange({ ...policy, localOnlyMode: e.target.checked })}
+                  className="mt-1 h-4 w-4 accent-emerald-500"
+                />
+              </label>
+            </div>
 
             <div className="border-t border-zinc-800 pt-3">
               <label className="flex cursor-pointer items-start justify-between gap-3">

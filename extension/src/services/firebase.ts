@@ -1,18 +1,18 @@
-import { initializeApp, type FirebaseApp } from '@firebase/app';
+import { initializeApp, type FirebaseApp } from 'firebase/app';
 import {
   CustomProvider,
   getToken,
   initializeAppCheck,
   ReCaptchaEnterpriseProvider,
   type AppCheck,
-} from '@firebase/app-check';
+} from 'firebase/app-check';
 import {
   getAI,
   getGenerativeModel,
   GoogleAIBackend,
   InferenceMode,
   type AI,
-} from '@firebase/ai';
+} from 'firebase/ai';
 import {
   ChromeLanguageModelRunner,
   LocalContextualScanner,
@@ -23,20 +23,19 @@ import {
 export interface CloudResult {
   rawText: string;
   model: string;
-  mode: 'firebase-cloud' | 'mock-cloud';
   latencyMs: number;
 }
 
 export interface CloudClient {
   readonly isFirebaseConfigured: boolean;
   readonly modelName: string;
-  generate(sanitizedPrompt: string, useMock: boolean): Promise<CloudResult>;
+  generate(sanitizedPrompt: string): Promise<CloudResult>;
 }
 
 export interface GatewayTelemetry {
   firebaseConfigured: boolean;
   cloudModel: string;
-  appCheckMode: 'debug-token' | 'recaptcha-enterprise' | 'mv3-pending-attestation' | 'none';
+  appCheckMode: 'debug-runtime' | 'recaptcha-enterprise' | 'unconfigured';
   note?: string;
 }
 
@@ -54,7 +53,7 @@ interface EnvFirebaseConfig {
   messagingSenderId: string;
   appId: string;
   cloudModel: string;
-  appCheckDebug: boolean;
+  appCheckDebugMode: boolean;
   recaptchaEnterpriseSiteKey?: string;
 }
 
@@ -72,7 +71,7 @@ function loadFirebaseEnv(): EnvFirebaseConfig | null {
     messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID?.trim() ?? '',
     appId,
     cloudModel: import.meta.env.VITE_FIREBASE_CLOUD_MODEL?.trim() || 'gemini-3.5-flash',
-    appCheckDebug: import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG === 'true',
+    appCheckDebugMode: import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_MODE === 'true',
     recaptchaEnterpriseSiteKey:
       import.meta.env.VITE_FIREBASE_RECAPTCHA_ENTERPRISE_SITE_KEY?.trim() || undefined,
   };
@@ -80,11 +79,13 @@ function loadFirebaseEnv(): EnvFirebaseConfig | null {
 
 /**
  * Firebase AI Logic on-device runner using InferenceMode.ONLY_ON_DEVICE.
- * Critically NEVER uses PREFER_ON_DEVICE so raw prompts cannot fall back to cloud.
+ * Explicitly calls initializeDeviceModel() inside a user gesture before inference,
+ * and NEVER uses PREFER_ON_DEVICE so raw prompts cannot fall back to cloud.
  */
 class FirebaseOnlyOnDeviceRunner implements OnDeviceRunner {
   readonly engine = 'firebase-only-on-device' as const;
   private readonly probe = new ChromeLanguageModelRunner();
+  private deviceModelPromise: Promise<ReturnType<typeof getGenerativeModel>> | null = null;
 
   constructor(private readonly ai: AI) {}
 
@@ -92,65 +93,69 @@ class FirebaseOnlyOnDeviceRunner implements OnDeviceRunner {
     return this.probe.checkAvailability();
   }
 
+  private async getInitializedModel(): Promise<ReturnType<typeof getGenerativeModel>> {
+    if (!this.deviceModelPromise) {
+      this.deviceModelPromise = (async () => {
+        const model = getGenerativeModel(this.ai, {
+          mode: InferenceMode.ONLY_ON_DEVICE,
+        });
+        const maybeInit = (
+          model as unknown as { initializeDeviceModel?: () => Promise<void> }
+        ).initializeDeviceModel;
+        if (typeof maybeInit === 'function') {
+          await maybeInit.call(model);
+        }
+        return model;
+      })();
+    }
+    try {
+      return await this.deviceModelPromise;
+    } catch (err) {
+      this.deviceModelPromise = null;
+      throw err;
+    }
+  }
+
+  async initialize(): Promise<void> {
+    await this.getInitializedModel();
+  }
+
   async prompt(systemPrompt: string, userPrompt: string): Promise<string> {
-    const model = getGenerativeModel(this.ai, {
-      mode: InferenceMode.ONLY_ON_DEVICE,
-    });
-    await model.initializeDeviceModel();
+    const model = await this.getInitializedModel();
     const res = await model.generateContent(`${systemPrompt}\n\n${userPrompt}`);
     return res.response.text();
   }
 }
 
-async function runMockCloudResponse(sanitizedPrompt: string): Promise<CloudResult> {
-  const started = performance.now();
-  await new Promise((r) => setTimeout(r, 220));
-  const placeholders = Array.from(
-    new Set(sanitizedPrompt.match(/\[[A-Z_]+_\d+\]/g) ?? []),
-  );
-
-  const rawText = [
-    '[MOCK CLOUD RESPONSE — Firebase credentials not configured yet]',
-    '',
-    'I received only your sanitized prompt:',
-    `"${sanitizedPrompt}"`,
-    '',
-    placeholders.length > 0
-      ? `Placeholders preserved in cloud reply: ${placeholders.join(', ')}.`
-      : 'No placeholders were present in the sanitized prompt.',
-    '',
-    placeholders.includes('[EMAIL_1]')
-      ? `Draft reply referencing ${placeholders.includes('[PERSON_1]') ? '[PERSON_1]' : 'the recipient'} at [EMAIL_1]: Thank you for the update — I have reviewed the details and will follow up shortly.`
-      : 'Tip: Once you add Firebase config to extension/.env.local, switch off Mock Mode to call live Gemini via Firebase AI Logic.',
-  ].join('\n');
-
-  return {
-    rawText,
-    model: 'mock-cloud-simulator',
-    mode: 'mock-cloud',
-    latencyMs: Math.round(performance.now() - started),
-  };
-}
-
-class HybridCloudClient implements CloudClient {
+class FirebaseCloudClient implements CloudClient {
   readonly isFirebaseConfigured: boolean;
   readonly modelName: string;
 
   constructor(
     private readonly ai: AI | null,
+    private readonly appCheck: AppCheck | null,
     modelName: string,
-    private readonly appCheck: AppCheck | null = null,
   ) {
+    // Enforce App Check: never enable live cloud calls unless BOTH ai and appCheck are active.
     this.isFirebaseConfigured = ai !== null && appCheck !== null;
     this.modelName = modelName;
   }
 
-  async generate(sanitizedPrompt: string, useMock: boolean): Promise<CloudResult> {
-    if (useMock) return runMockCloudResponse(sanitizedPrompt);
-    if (!this.ai || !this.appCheck) throw new Error('Firebase cloud requires App Check.');
+  async generate(sanitizedPrompt: string): Promise<CloudResult> {
+    if (!this.ai || !this.appCheck) {
+      throw new Error(
+        'Cloud Gemini requires Firebase AI Logic + App Check to be configured in extension/.env.local.',
+      );
+    }
 
     const started = performance.now();
-    await getToken(this.appCheck);
+
+    // Explicitly acquire and verify an App Check token before live cloud inference.
+    const appCheckToken = await getToken(this.appCheck, false);
+    if (!appCheckToken?.token) {
+      throw new Error('App Check failed to issue a valid attestation token.');
+    }
+
     const model = getGenerativeModel(this.ai, {
       model: this.modelName,
       mode: InferenceMode.ONLY_IN_CLOUD,
@@ -160,7 +165,6 @@ class HybridCloudClient implements CloudClient {
     return {
       rawText: result.response.text(),
       model: this.modelName,
-      mode: 'firebase-cloud',
       latencyMs: Math.round(performance.now() - started),
     };
   }
@@ -179,13 +183,15 @@ export function createExtensionServices(): ExtensionServices {
 
   if (!env) {
     return {
-      localScanner: new LocalContextualScanner(new ChromeLanguageModelRunner()),
-      cloudClient: new HybridCloudClient(null, 'mock-cloud-simulator'),
+      localScanner: new LocalContextualScanner(new ChromeLanguageModelRunner(), {
+        enableBrowserHeuristicFallback: true,
+      }),
+      cloudClient: new FirebaseCloudClient(null, null, 'unconfigured'),
       telemetry: {
         firebaseConfigured: false,
         cloudModel: 'unconfigured',
-        appCheckMode: 'none',
-        note: 'Firebase AI Logic is not configured yet. Using Mock Cloud mode for E2E testing until extension/.env.local is populated.',
+        appCheckMode: 'unconfigured',
+        note: 'Add your Firebase Web App config and App Check mode to extension/.env.local to enable built-in Cloud Gemini chat.',
       },
     };
   }
@@ -199,40 +205,52 @@ export function createExtensionServices(): ExtensionServices {
     appId: env.appId,
   });
 
-  let appCheckMode: GatewayTelemetry['appCheckMode'] = 'none';
   let appCheck: AppCheck | null = null;
-  if (env.appCheckDebug) {
+  let appCheckMode: GatewayTelemetry['appCheckMode'] = 'unconfigured';
+
+  if (env.appCheckDebugMode) {
     (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
     appCheck = initializeAppCheck(app, {
       provider: new CustomProvider({
         getToken: async () => {
-          throw new Error('App Check debug token expected to handle token exchange.');
+          throw new Error(
+            'App Check runtime debug token should handle token exchange in local development.',
+          );
         },
       }),
+      isTokenAutoRefreshEnabled: true,
     });
-    appCheckMode = 'debug-token';
+    appCheckMode = 'debug-runtime';
   } else if (!isExtension && env.recaptchaEnterpriseSiteKey) {
     appCheck = initializeAppCheck(app, {
       provider: new ReCaptchaEnterpriseProvider(env.recaptchaEnterpriseSiteKey),
       isTokenAutoRefreshEnabled: true,
     });
     appCheckMode = 'recaptcha-enterprise';
-  } else {
-    appCheckMode = 'mv3-pending-attestation';
   }
 
   const ai = getAI(app, { backend: new GoogleAIBackend() });
+  const liveAi = appCheck ? ai : null;
+
+  const hasDirectLanguageModel =
+    typeof (globalThis as unknown as { LanguageModel?: unknown }).LanguageModel !==
+    'undefined';
 
   return {
-    localScanner: new LocalContextualScanner(new FirebaseOnlyOnDeviceRunner(ai)),
-    cloudClient: new HybridCloudClient(ai, env.cloudModel, appCheck),
+    localScanner: new LocalContextualScanner(
+      hasDirectLanguageModel
+        ? new ChromeLanguageModelRunner()
+        : new FirebaseOnlyOnDeviceRunner(ai),
+      { enableBrowserHeuristicFallback: true },
+    ),
+    cloudClient: new FirebaseCloudClient(liveAi, appCheck, env.cloudModel),
     telemetry: {
-      firebaseConfigured: appCheck !== null,
-      cloudModel: env.cloudModel,
+      firebaseConfigured: liveAi !== null,
+      cloudModel: liveAi ? env.cloudModel : 'unconfigured',
       appCheckMode,
       note:
-        appCheckMode === 'mv3-pending-attestation'
-          ? 'Firebase cloud requires App Check. Enable private debug mode for local verification.'
+        liveAi === null
+          ? 'Live cloud calls are disabled until App Check is configured (set VITE_FIREBASE_APPCHECK_DEBUG_MODE=true for local MV3 dev or use a custom attestation provider).'
           : undefined,
     },
   };

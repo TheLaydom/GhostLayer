@@ -4,6 +4,11 @@ import { resolve } from 'node:path';
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@ghostlayer/core': resolve(import.meta.dirname, '../packages/core/src/index.ts'),
+    },
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,

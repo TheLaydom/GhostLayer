@@ -17,24 +17,42 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId !== CONTEXT_MENU_ID) return;
-  const selectedText = info.selectionText?.trim();
-  if (!selectedText) return;
-
-  // Store strictly in chrome.storage.session (RAM-only, cleared when browser closes).
+async function openSidePanelWithText(text: string, windowId?: number): Promise<void> {
   if (chrome.storage?.session) {
     await chrome.storage.session.set({
       [PENDING_SELECTION_KEY]: {
-        text: selectedText,
+        text,
         receivedAt: Date.now(),
       },
     });
   }
 
-  if (tab?.windowId !== undefined && chrome.sidePanel?.open) {
-    chrome.sidePanel.open({ windowId: tab.windowId }).catch((err) => {
-      console.error('[GhostLayer] Failed to open side panel from context menu:', err);
-    });
+  if (windowId !== undefined && chrome.sidePanel?.open) {
+    await chrome.sidePanel.open({ windowId });
   }
+}
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== CONTEXT_MENU_ID) return;
+  const selectedText = info.selectionText?.trim();
+  if (!selectedText) return;
+
+  try {
+    await openSidePanelWithText(selectedText, tab?.windowId);
+  } catch (err) {
+    console.error('[GhostLayer] Failed to open side panel from context menu:', err);
+  }
+});
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === 'GHOSTLAYER_OPEN_SIDEPANEL' && typeof message.text === 'string') {
+    openSidePanelWithText(message.text, sender.tab?.windowId)
+      .then(() => sendResponse({ ok: true }))
+      .catch((err) => {
+        console.error('[GhostLayer] Failed to open side panel from content script:', err);
+        sendResponse({ ok: false });
+      });
+    return true;
+  }
+  return false;
 });
