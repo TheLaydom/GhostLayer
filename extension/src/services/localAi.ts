@@ -1,4 +1,4 @@
-import type { CategoryType } from '../core-adapter';
+import type { LocalFinding } from '@ghostlayer/core';
 
 export type LocalAiAvailability =
   | 'ready'
@@ -6,14 +6,7 @@ export type LocalAiAvailability =
   | 'downloading'
   | 'unavailable';
 
-export interface LocalAiSpan {
-  type: CategoryType;
-  start: number;
-  end: number;
-  original: string;
-  confidence: number;
-  source: 'local-ai';
-}
+export type LocalAiSpan = LocalFinding & { source: 'local-ai' };
 
 export interface LocalAiScanResult {
   status: LocalAiAvailability;
@@ -29,7 +22,7 @@ export interface OnDeviceRunner {
   prompt(systemPrompt: string, userPrompt: string): Promise<string>;
 }
 
-const CONTEXTUAL_TYPES = new Set<CategoryType>([
+const CONTEXTUAL_TYPES = new Set<LocalFinding['type']>([
   'PERSON',
   'ORGANIZATION',
   'ADDRESS',
@@ -45,20 +38,17 @@ If none exist, return {"entities":[]}. Never invent text not present in the inpu
 function parseJsonEntities(raw: string): Array<{ text: string; type: string }> {
   const start = raw.indexOf('{');
   const end = raw.lastIndexOf('}');
-  if (start === -1 || end <= start) return [];
-  try {
-    const parsed = JSON.parse(raw.slice(start, end + 1)) as { entities?: unknown };
-    if (!Array.isArray(parsed.entities)) return [];
-    return parsed.entities.filter(
-      (item): item is { text: string; type: string } =>
-        typeof item === 'object' &&
-        item !== null &&
-        typeof (item as { text?: unknown }).text === 'string' &&
-        typeof (item as { type?: unknown }).type === 'string',
-    );
-  } catch {
-    return [];
+  if (start === -1 || end <= start) throw new Error('Invalid on-device response.');
+  const parsed = JSON.parse(raw.slice(start, end + 1)) as { entities?: unknown };
+  if (!Array.isArray(parsed.entities) || parsed.entities.length > 100) {
+    throw new Error('Invalid on-device response.');
   }
+  return parsed.entities.map((item) => {
+    if (!item || typeof item.text !== 'string' || typeof item.type !== 'string') {
+      throw new Error('Invalid on-device entity.');
+    }
+    return { text: item.text, type: item.type };
+  });
 }
 
 /**
@@ -71,7 +61,7 @@ function anchorEntities(
 ): LocalAiSpan[] {
   const spans: LocalAiSpan[] = [];
   for (const item of entities) {
-    const type = item.type.trim().toUpperCase() as CategoryType;
+    const type = item.type.trim().toUpperCase() as LocalFinding['type'];
     if (!CONTEXTUAL_TYPES.has(type)) continue;
     const snippet = item.text.trim();
     if (snippet.length < 2 || /^\[[A-Z_]+_\d+\]$/.test(snippet)) continue;

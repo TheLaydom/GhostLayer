@@ -1,16 +1,18 @@
-import { initializeApp, type FirebaseApp } from 'firebase/app';
+import { initializeApp, type FirebaseApp } from '@firebase/app';
 import {
   CustomProvider,
+  getToken,
   initializeAppCheck,
   ReCaptchaEnterpriseProvider,
-} from 'firebase/app-check';
+  type AppCheck,
+} from '@firebase/app-check';
 import {
   getAI,
   getGenerativeModel,
   GoogleAIBackend,
   InferenceMode,
   type AI,
-} from 'firebase/ai';
+} from '@firebase/ai';
 import {
   ChromeLanguageModelRunner,
   LocalContextualScanner,
@@ -52,7 +54,7 @@ interface EnvFirebaseConfig {
   messagingSenderId: string;
   appId: string;
   cloudModel: string;
-  appCheckDebugToken?: string;
+  appCheckDebug: boolean;
   recaptchaEnterpriseSiteKey?: string;
 }
 
@@ -70,8 +72,7 @@ function loadFirebaseEnv(): EnvFirebaseConfig | null {
     messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID?.trim() ?? '',
     appId,
     cloudModel: import.meta.env.VITE_FIREBASE_CLOUD_MODEL?.trim() || 'gemini-3.5-flash',
-    appCheckDebugToken:
-      import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN?.trim() || undefined,
+    appCheckDebug: import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG === 'true',
     recaptchaEnterpriseSiteKey:
       import.meta.env.VITE_FIREBASE_RECAPTCHA_ENTERPRISE_SITE_KEY?.trim() || undefined,
   };
@@ -95,6 +96,7 @@ class FirebaseOnlyOnDeviceRunner implements OnDeviceRunner {
     const model = getGenerativeModel(this.ai, {
       mode: InferenceMode.ONLY_ON_DEVICE,
     });
+    await model.initializeDeviceModel();
     const res = await model.generateContent(`${systemPrompt}\n\n${userPrompt}`);
     return res.response.text();
   }
@@ -137,17 +139,18 @@ class HybridCloudClient implements CloudClient {
   constructor(
     private readonly ai: AI | null,
     modelName: string,
+    private readonly appCheck: AppCheck | null = null,
   ) {
-    this.isFirebaseConfigured = ai !== null;
+    this.isFirebaseConfigured = ai !== null && appCheck !== null;
     this.modelName = modelName;
   }
 
   async generate(sanitizedPrompt: string, useMock: boolean): Promise<CloudResult> {
-    if (useMock || !this.ai) {
-      return runMockCloudResponse(sanitizedPrompt);
-    }
+    if (useMock) return runMockCloudResponse(sanitizedPrompt);
+    if (!this.ai || !this.appCheck) throw new Error('Firebase cloud requires App Check.');
 
     const started = performance.now();
+    await getToken(this.appCheck);
     const model = getGenerativeModel(this.ai, {
       model: this.modelName,
       mode: InferenceMode.ONLY_IN_CLOUD,
@@ -197,20 +200,19 @@ export function createExtensionServices(): ExtensionServices {
   });
 
   let appCheckMode: GatewayTelemetry['appCheckMode'] = 'none';
-  if (env.appCheckDebugToken) {
-    (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN =
-      env.appCheckDebugToken;
-    initializeAppCheck(app, {
+  let appCheck: AppCheck | null = null;
+  if (env.appCheckDebug) {
+    (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    appCheck = initializeAppCheck(app, {
       provider: new CustomProvider({
         getToken: async () => {
           throw new Error('App Check debug token expected to handle token exchange.');
         },
       }),
-      isTokenAutoRefreshEnabled: true,
     });
     appCheckMode = 'debug-token';
   } else if (!isExtension && env.recaptchaEnterpriseSiteKey) {
-    initializeAppCheck(app, {
+    appCheck = initializeAppCheck(app, {
       provider: new ReCaptchaEnterpriseProvider(env.recaptchaEnterpriseSiteKey),
       isTokenAutoRefreshEnabled: true,
     });
@@ -223,14 +225,14 @@ export function createExtensionServices(): ExtensionServices {
 
   return {
     localScanner: new LocalContextualScanner(new FirebaseOnlyOnDeviceRunner(ai)),
-    cloudClient: new HybridCloudClient(ai, env.cloudModel),
+    cloudClient: new HybridCloudClient(ai, env.cloudModel, appCheck),
     telemetry: {
-      firebaseConfigured: true,
+      firebaseConfigured: appCheck !== null,
       cloudModel: env.cloudModel,
       appCheckMode,
       note:
         appCheckMode === 'mv3-pending-attestation'
-          ? 'MV3 CSP blocks remote reCAPTCHA scripts. Set VITE_FIREBASE_APPCHECK_DEBUG_TOKEN in extension/.env.local for local dev.'
+          ? 'Firebase cloud requires App Check. Enable private debug mode for local verification.'
           : undefined,
     },
   };

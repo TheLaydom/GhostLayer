@@ -13,12 +13,12 @@ export type FindingSource = 'rule' | 'local-ai';
 export type Mapping = {
   original: string;
   placeholder: string;
-  type: string;
+  type: Category;
   source: FindingSource;
   restorable?: boolean;
 };
 export type Finding = {
-  type: string;
+  type: Category;
   original: string;
   placeholder: string;
   start: number;
@@ -137,11 +137,26 @@ export function sanitize(text: string, policy: Policy = {}): SanitizeResult {
   return sanitizeWithSession(text, policy, new Map());
 }
 
+export function restoreWithReport(text: string, mappings: readonly Mapping[]) {
+  const byToken = new Map(mappings.map(mapping => [mapping.placeholder, mapping]));
+  const skipped = new Set<string>();
+  let restoredCount = 0;
+  const restored = text.replace(tokenPattern, (token, kind: string, number: string) => {
+    const placeholder = canonical(kind, number);
+    const match = byToken.get(placeholder);
+    if (!match) return token;
+    if (!(match.restorable ?? !restrictedCategories.has(match.type))) {
+      skipped.add(placeholder);
+      return token;
+    }
+    restoredCount++;
+    return match.original;
+  });
+  return { restored, restoredCount, skippedPlaceholders: [...skipped] };
+}
+
 export function restore(text: string, mappings: readonly Mapping[]): string {
-  const originals = new Map(mappings.filter(({ type, restorable }) =>
-    restorable ?? !restrictedCategories.has(type)).map(({ placeholder, original }) => [placeholder, original]));
-  return text.replace(tokenPattern, (token, kind: string, number: string) =>
-    originals.get(canonical(kind, number)) ?? token);
+  return restoreWithReport(text, mappings).restored;
 }
 
 function reviewWithSession(text: string, policy: Policy, existing: Map<string, string>) {

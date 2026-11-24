@@ -49,7 +49,7 @@ npm run build
    npx -y firebase-tools@latest init ailogic
    ```
 3. Fill in `VITE_FIREBASE_*` keys in `extension/.env.local` (never commit `.env.local`).
-4. Register an **App Check debug token** in Firebase Console (**Security -> App Check -> Apps -> Manage debug tokens**) and set `VITE_FIREBASE_APPCHECK_DEBUG_TOKEN` in `extension/.env.local`.
+4. For a private development build set `VITE_FIREBASE_APPCHECK_DEBUG=true` in `extension/.env.local`. After rebuilding, initiate a test request with synthetic data, then register the generated token from extension DevTools in Firebase Console (**Security -> App Check -> Apps -> Manage debug tokens**) and retry. Keep the token and debug build private.
    *(Note: Chrome Manifest V3 CSP blocks remote reCAPTCHA scripts, so MV3 extensions require either a debug token for local development or a custom App Check attestation provider for production.)*
 5. Rebuild (`npm run build`) and reload the unpacked extension.
 

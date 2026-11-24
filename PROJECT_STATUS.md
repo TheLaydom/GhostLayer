@@ -22,4 +22,9 @@ The earlier single-package prototype is separate from this TypeScript handoff. I
 
 ## GitHub development snapshot
 
-This repository includes the verified TypeScript core and the latest Antigravity extension source as separate workspaces. The extension still uses its transitional adapter. Core tests passed with Vite pinned in the root workspace. The extension build fails with its declared Firebase 11 dependency, which lacks the hybrid inference API. Its test runner also hit a Windows child-process permission error on this host. Dependency audit flagged seven advisories in the combined tree. Browser and live Firebase checks remain open.
+The extension now uses the TypeScript core for detection, session mappings, send approval, and restoration. Firebase uses the app, AI Logic, and App Check modules directly. Source and policy edits invalidate the current review.
+
+- Core build and type checks passed with 37 tests.
+- Extension production build passed with 8 tests, including a mock round trip and App Check gating. The built MV3 manifest, service worker, and side-panel entry were checked.
+- The dependency audit reported zero known vulnerabilities for the installed lockfile.
+- Unpacked browser interaction, hardware Gemini Nano inference, and live Firebase/App Check verification remain open. Use synthetic data for those checks.

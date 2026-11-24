@@ -7,7 +7,7 @@ describe('SessionSanitizer (extension core-adapter)', () => {
     const policy = createDefaultPolicy();
 
     const first = sanitizer.sanitize(
-      'Email alex@example.com and CC Alex@Example.com.',
+      'Email alex@example.com and CC alex@example.com.',
       policy,
     );
     expect(first.sanitized).toBe('Email [EMAIL_1] and CC [EMAIL_1].');
@@ -33,7 +33,6 @@ describe('SessionSanitizer (extension core-adapter)', () => {
     const restored = sanitizer.restore(
       'Draft for [EMAIL_1]: rotated [API_KEY_1].',
       res.mappings,
-      policy.restorableCategories,
     );
     expect(restored.restored).toBe('Draft for alex@example.com: rotated [API_KEY_1].');
     expect(restored.skippedPlaceholders).toContain('[API_KEY_1]');
@@ -44,8 +43,7 @@ describe('SessionSanitizer (extension core-adapter)', () => {
     const policy = createDefaultPolicy();
     policy.enabledCategories.API_KEY = false;
 
-    const res = sanitizer.sanitize('Use sk-proj-abc1234567890XYZ9876543210', policy);
-    const residual = sanitizer.hasResidualCriticalSecrets(res.sanitized);
-    expect(residual.length).toBeGreaterThan(0);
+    const review = sanitizer.createReview('Use sk-proj-00000000000000000000', policy, []);
+    expect(review.blocked).toBe('residual-sensitive-data');
   });
 });

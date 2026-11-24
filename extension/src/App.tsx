@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MAX_PROMPT_LENGTH } from '@ghostlayer/core';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -22,7 +23,6 @@ import {
   SessionSanitizer,
   type CategoryType,
   type Policy,
-  type SanitizeResult,
 } from './core-adapter';
 import { createExtensionServices, type CloudResult } from './services/firebase';
 import type { LocalAiAvailability, LocalAiScanResult } from './services/localAi';
@@ -45,11 +45,10 @@ const SAMPLE_PROMPTS = [
 ];
 
 interface ScanSnapshot {
-  original: string;
-  result: SanitizeResult;
+  revision: number;
+  result: ReturnType<SessionSanitizer['createReview']>;
   localAi: LocalAiScanResult;
   ruleLatencyMs: number;
-  residualCritical: number;
 }
 
 function nowTime(): string {
@@ -91,10 +90,20 @@ export function App() {
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [copied, setCopied] = useState(false);
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
+  const revision = useRef(0);
+  const invalidateReview = useCallback(() => {
+    revision.current++;
+    setSnapshot(null);
+    setCloudOutput(null);
+    setSendError(null);
+    setRevealed({});
+  }, []);
 
   // Stateless live deterministic preview while typing (runs locally, <1ms, zero vault mutation)
   const livePreviewCounts = useMemo(() => {
-    if (!prompt.trim()) return [] as Array<{ type: CategoryType; count: number }>;
+    if (!prompt.trim() || prompt.length > MAX_PROMPT_LENGTH) {
+      return [] as Array<{ type: CategoryType; count: number }>;
+    }
     const preview = sanitize(prompt, policy);
     const counts = new Map<CategoryType, number>();
     for (const f of preview.findings) {
@@ -106,7 +115,10 @@ export function App() {
   useEffect(() => {
     let mounted = true;
     loadSavedPolicy().then((saved) => {
-      if (mounted) setPolicy(saved);
+      if (mounted) {
+        invalidateReview();
+        setPolicy(saved);
+      }
     });
     services.localScanner.checkStatus().then((st) => {
       if (mounted) setLocalAiStatus(st);
@@ -118,7 +130,7 @@ export function App() {
         const pending = data[PENDING_SELECTION_KEY] as { text?: string } | undefined;
         if (mounted && pending?.text) {
           setPrompt(pending.text);
-          setSnapshot(null);
+          invalidateReview();
           setSelectionNotice('Loaded selected text from browser context menu.');
           void chrome.storage.session.remove(PENDING_SELECTION_KEY);
         }
@@ -134,7 +146,7 @@ export function App() {
           | undefined;
         if (nextVal?.text) {
           setPrompt(nextVal.text);
-          setSnapshot(null);
+          invalidateReview();
           setSelectionNotice('Loaded selected text from browser context menu.');
           void chrome.storage.session.remove(PENDING_SELECTION_KEY);
         }
@@ -150,9 +162,10 @@ export function App() {
     return () => {
       mounted = false;
     };
-  }, [services]);
+  }, [services, invalidateReview]);
 
   const updatePolicy = (next: Policy) => {
+    invalidateReview();
     setPolicy(next);
     void savePolicy(next);
   };
@@ -165,15 +178,21 @@ export function App() {
   };
 
   const handleScan = async () => {
+    invalidateReview();
+    if (prompt.length > MAX_PROMPT_LENGTH) {
+      setSendError(`Shorten the prompt to ${MAX_PROMPT_LENGTH.toLocaleString()} characters before reviewing.`);
+      return;
+    }
+    const scanRevision = revision.current;
     setIsScanning(true);
     setSendError(null);
     setSelectionNotice(null);
     try {
-      const ruleStart = performance.now();
       const localAi = await services.localScanner.scan(prompt);
-      const result = sanitizer.sanitize(prompt, policy, localAi.spans);
+      if (scanRevision !== revision.current) return;
+      const ruleStart = performance.now();
+      const result = sanitizer.createReview(prompt, policy, localAi.status === 'ready' ? localAi.spans : null);
       const ruleLatencyMs = Math.round(performance.now() - ruleStart);
-      const residualCritical = sanitizer.hasResidualCriticalSecrets(result.sanitized).length;
 
       setLocalAiStatus({
         status: localAi.status,
@@ -181,11 +200,10 @@ export function App() {
         reason: localAi.reason,
       });
       setSnapshot({
-        original: prompt,
+        revision: scanRevision,
         result,
         localAi,
         ruleLatencyMs,
-        residualCritical,
       });
 
       appendAudit({
@@ -195,6 +213,10 @@ export function App() {
         target: 'local-only',
         latencyMs: ruleLatencyMs,
       });
+    } catch (error) {
+      if (scanRevision === revision.current) {
+        setSendError(error instanceof Error ? error.message : 'Local review failed.');
+      }
     } finally {
       setIsScanning(false);
     }
@@ -202,24 +224,24 @@ export function App() {
 
   const blockers: Array<{ code: string; message: string }> = [];
   if (snapshot) {
-    if (policy.localOnlyMode) {
+    if (snapshot.result.blocked === 'local-only') {
       blockers.push({
         code: 'LOCAL_ONLY',
         message: 'Local-Only Mode is active. Cloud transmission is disabled by your policy.',
       });
     }
-    if (policy.blockIfLocalAiUnavailable && snapshot.localAi.status !== 'ready') {
+    if (snapshot.result.blocked === 'local-ai-unavailable') {
       blockers.push({
         code: 'LOCAL_AI_UNAVAILABLE',
         message:
           snapshot.localAi.reason ??
-          'On-device AI is unavailable. Fail-safe policy blocks cloud transmission rather than risking unredacted contextual PII.',
+          'On-device AI is unavailable. Send requires an allowed rules-only review that redacts at least one span.',
       });
     }
-    if (snapshot.residualCritical > 0) {
+    if (snapshot.result.blocked === 'residual-sensitive-data') {
       blockers.push({
         code: 'RESIDUAL_CRITICAL',
-        message: `Blocked: outgoing payload still contains ${snapshot.residualCritical} unredacted critical secret(s). Re-enable redaction or remove them.`,
+        message: 'Blocked: the preview contains recognizable sensitive data. Re-enable redaction or remove it.',
       });
     }
   }
@@ -227,29 +249,18 @@ export function App() {
   const canTransmit = Boolean(snapshot) && blockers.length === 0 && !isSending;
 
   const handleTransmit = async () => {
-    if (!snapshot || !canTransmit) return;
+    if (!snapshot || !canTransmit || snapshot.revision !== revision.current) return;
     setIsSending(true);
     setSendError(null);
     try {
-      if (sanitizer.hasResidualCriticalSecrets(snapshot.result.sanitized).length > 0) {
-        appendAudit({
-          action: 'blocked',
-          findingsCount: snapshot.result.findings.length,
-          localAiStatus: snapshot.localAi.status,
-          target: 'egress-gate',
-          latencyMs: 0,
-        });
-        throw new Error('Blocked: residual critical secret detected before transmission.');
-      }
-
       const cloud = await services.cloudClient.generate(
-        snapshot.result.sanitized,
+        snapshot.result.toCloudPrompt(prompt, snapshot.result.sanitized),
         useMockCloud,
       );
+      if (snapshot.revision !== revision.current) return;
       const restoration = sanitizer.restore(
         cloud.rawText,
         snapshot.result.mappings,
-        policy.restorableCategories,
       );
 
       setCloudOutput({
@@ -258,7 +269,7 @@ export function App() {
         restoredCount: restoration.restoredCount,
         skipped: restoration.skippedPlaceholders,
       });
-      setResponseTab('restored');
+      setResponseTab('raw');
 
       appendAudit({
         action: 'cloud-send',
@@ -268,7 +279,9 @@ export function App() {
         latencyMs: cloud.latencyMs,
       });
     } catch (err) {
-      setSendError(err instanceof Error ? err.message : 'Cloud transmission failed.');
+      if (snapshot.revision === revision.current) {
+        setSendError(err instanceof Error ? err.message : 'Cloud transmission failed.');
+      }
     } finally {
       setIsSending(false);
     }
@@ -276,10 +289,7 @@ export function App() {
 
   const handleResetVault = () => {
     sanitizer.clear();
-    setSnapshot(null);
-    setCloudOutput(null);
-    setSendError(null);
-    setRevealed({});
+    invalidateReview();
     setAuditEntries([]);
   };
 
@@ -401,7 +411,7 @@ export function App() {
                   type="button"
                   onClick={() => {
                     setPrompt(s.text);
-                    setSnapshot(null);
+                    invalidateReview();
                   }}
                   className="rounded border border-zinc-800 bg-zinc-950 px-2 py-0.5 text-[11px] text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
                 >
@@ -413,11 +423,12 @@ export function App() {
 
           <textarea
             id="prompt-input"
+            maxLength={MAX_PROMPT_LENGTH}
             rows={5}
             value={prompt}
             onChange={(e) => {
               setPrompt(e.target.value);
-              setSnapshot(null);
+              invalidateReview();
             }}
             placeholder="Enter text, code, logs, or emails to sanitize locally..."
             className="w-full resize-y rounded border border-zinc-800 bg-zinc-950 p-2.5 font-mono text-xs leading-relaxed text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500/60 focus:outline-none"
@@ -453,7 +464,10 @@ export function App() {
                 type="checkbox"
                 checked={useMockCloud}
                 disabled={!services.telemetry.firebaseConfigured}
-                onChange={(e) => setUseMockCloud(e.target.checked)}
+                onChange={(e) => {
+                  invalidateReview();
+                  setUseMockCloud(e.target.checked);
+                }}
                 className="h-3.5 w-3.5 accent-amber-500"
               />
               <span>
@@ -528,7 +542,7 @@ export function App() {
                   <span className="font-mono text-emerald-400">ON-DEVICE ONLY</span>
                 </div>
                 <HighlightedPrompt
-                  text={snapshot.original}
+                  text={prompt}
                   findings={snapshot.result.findings}
                 />
               </div>

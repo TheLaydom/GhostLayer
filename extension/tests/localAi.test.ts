@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { LocalContextualScanner, type OnDeviceRunner } from '../src/services/localAi';
 
 describe('LocalContextualScanner (on-device AI)', () => {
+  it('blocks a malformed model response instead of treating it as an empty scan', async () => {
+    const scanner = new LocalContextualScanner({
+      engine: 'chrome-language-model',
+      checkAvailability: async () => ({ status: 'ready' }),
+      prompt: async () => 'not JSON',
+    });
+    expect((await scanner.scan('Ask Alex Morgan.')).status).toBe('unavailable');
+  });
   it('returns unavailable cleanly when no runner is present (never falls back to cloud)', async () => {
     const scanner = new LocalContextualScanner(null);
     const res = await scanner.scan('Email Alex Morgan at Acme Corp.');
