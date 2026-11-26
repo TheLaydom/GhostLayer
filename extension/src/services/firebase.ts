@@ -35,7 +35,11 @@ export interface CloudClient {
 export interface GatewayTelemetry {
   firebaseConfigured: boolean;
   cloudModel: string;
-  appCheckMode: 'debug-runtime' | 'recaptcha-enterprise' | 'unconfigured';
+  appCheckMode:
+    | 'custom-broker'
+    | 'debug-runtime'
+    | 'recaptcha-enterprise'
+    | 'unconfigured';
   note?: string;
 }
 
@@ -53,6 +57,7 @@ interface EnvFirebaseConfig {
   messagingSenderId: string;
   appId: string;
   cloudModel: string;
+  appCheckBrokerUrl?: string;
   appCheckDebugMode: boolean;
   recaptchaEnterpriseSiteKey?: string;
 }
@@ -71,6 +76,8 @@ function loadFirebaseEnv(): EnvFirebaseConfig | null {
     messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID?.trim() ?? '',
     appId,
     cloudModel: import.meta.env.VITE_FIREBASE_CLOUD_MODEL?.trim() || 'gemini-3.5-flash',
+    appCheckBrokerUrl:
+      import.meta.env.VITE_FIREBASE_APPCHECK_BROKER_URL?.trim() || undefined,
     appCheckDebugMode: import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_MODE === 'true',
     recaptchaEnterpriseSiteKey:
       import.meta.env.VITE_FIREBASE_RECAPTCHA_ENTERPRISE_SITE_KEY?.trim() || undefined,
@@ -156,10 +163,14 @@ class FirebaseCloudClient implements CloudClient {
       throw new Error('App Check failed to issue a valid attestation token.');
     }
 
+    // Firebase JS SDK 13 hybrid mode requires cloud config inside `inCloudParams`
+    // (top-level `model` and `systemInstruction` are ignored when `mode` is set).
     const model = getGenerativeModel(this.ai, {
-      model: this.modelName,
       mode: InferenceMode.ONLY_IN_CLOUD,
-      systemInstruction: CLOUD_SYSTEM_INSTRUCTION,
+      inCloudParams: {
+        model: this.modelName,
+        systemInstruction: CLOUD_SYSTEM_INSTRUCTION,
+      },
     });
     const result = await model.generateContent(sanitizedPrompt);
     return {
@@ -208,7 +219,37 @@ export function createExtensionServices(): ExtensionServices {
   let appCheck: AppCheck | null = null;
   let appCheckMode: GatewayTelemetry['appCheckMode'] = 'unconfigured';
 
-  if (env.appCheckDebugMode) {
+  if (env.appCheckBrokerUrl) {
+    // Production MV3 CustomProvider: mints short-lived App Check tokens automatically for every user
+    const brokerUrl = env.appCheckBrokerUrl;
+    appCheck = initializeAppCheck(app, {
+      provider: new CustomProvider({
+        getToken: async () => {
+          const resp = await fetch(brokerUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ appId: env.appId }),
+          });
+          if (!resp.ok) {
+            throw new Error(`App Check broker returned HTTP ${resp.status}.`);
+          }
+          const data = (await resp.json()) as {
+            token?: string;
+            expireTimeMillis?: number;
+          };
+          if (!data.token || typeof data.expireTimeMillis !== 'number') {
+            throw new Error('App Check broker returned an invalid token payload.');
+          }
+          return {
+            token: data.token,
+            expireTimeMillis: data.expireTimeMillis,
+          };
+        },
+      }),
+      isTokenAutoRefreshEnabled: true,
+    });
+    appCheckMode = 'custom-broker';
+  } else if (env.appCheckDebugMode) {
     (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
     appCheck = initializeAppCheck(app, {
       provider: new CustomProvider({
@@ -250,7 +291,7 @@ export function createExtensionServices(): ExtensionServices {
       appCheckMode,
       note:
         liveAi === null
-          ? 'Live cloud calls are disabled until App Check is configured (set VITE_FIREBASE_APPCHECK_DEBUG_MODE=true for local MV3 dev or use a custom attestation provider).'
+          ? 'Live cloud calls are disabled until App Check is configured (set VITE_FIREBASE_APPCHECK_BROKER_URL for production MV3 or VITE_FIREBASE_APPCHECK_DEBUG_MODE=true for local dev).'
           : undefined,
     },
   };
