@@ -15,6 +15,7 @@ import {
 } from 'firebase/ai';
 import {
   ChromeLanguageModelRunner,
+  ENTITY_JSON_SCHEMA,
   LocalContextualScanner,
   type LocalAiAvailability,
   type OnDeviceRunner,
@@ -105,13 +106,17 @@ class FirebaseOnlyOnDeviceRunner implements OnDeviceRunner {
       this.deviceModelPromise = (async () => {
         const model = getGenerativeModel(this.ai, {
           mode: InferenceMode.ONLY_ON_DEVICE,
+          onDeviceParams: {
+            createOptions: {
+              expectedInputs: [{ type: 'text', languages: ['en'] }],
+              expectedOutputs: [{ type: 'text', languages: ['en'] }],
+            },
+            promptOptions: {
+              responseConstraint: ENTITY_JSON_SCHEMA as unknown as Record<string, unknown>,
+            },
+          },
         });
-        const maybeInit = (
-          model as unknown as { initializeDeviceModel?: () => Promise<void> }
-        ).initializeDeviceModel;
-        if (typeof maybeInit === 'function') {
-          await maybeInit.call(model);
-        }
+        await model.initializeDeviceModel();
         return model;
       })();
     }
@@ -130,6 +135,10 @@ class FirebaseOnlyOnDeviceRunner implements OnDeviceRunner {
   async prompt(systemPrompt: string, userPrompt: string): Promise<string> {
     const model = await this.getInitializedModel();
     const res = await model.generateContent(`${systemPrompt}\n\n${userPrompt}`);
+    const source = (res.response as { inferenceSource?: string }).inferenceSource;
+    if (source && source !== 'ON_DEVICE') {
+      throw new Error(`Unexpected inference source for local scan: ${source}`);
+    }
     return res.response.text();
   }
 }
@@ -273,17 +282,12 @@ export function createExtensionServices(): ExtensionServices {
   const ai = getAI(app, { backend: new GoogleAIBackend() });
   const liveAi = appCheck ? ai : null;
 
-  const hasDirectLanguageModel =
-    typeof (globalThis as unknown as { LanguageModel?: unknown }).LanguageModel !==
-    'undefined';
-
   return {
-    localScanner: new LocalContextualScanner(
-      hasDirectLanguageModel
-        ? new ChromeLanguageModelRunner()
-        : new FirebaseOnlyOnDeviceRunner(ai),
-      { enableBrowserHeuristicFallback: true },
-    ),
+    // Always route Chrome Gemini Nano through Firebase AI Logic (InferenceMode.ONLY_ON_DEVICE)
+    // to satisfy #BuildHybridAI 2026 Chrome track requirements.
+    localScanner: new LocalContextualScanner(new FirebaseOnlyOnDeviceRunner(ai), {
+      enableBrowserHeuristicFallback: true,
+    }),
     cloudClient: new FirebaseCloudClient(liveAi, appCheck, env.cloudModel),
     telemetry: {
       firebaseConfigured: liveAi !== null,

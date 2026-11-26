@@ -38,7 +38,7 @@ export interface OnDeviceRunner {
   readonly engine: 'firebase-only-on-device' | 'chrome-language-model';
   checkAvailability(): Promise<{ status: LocalAiAvailability; reason?: string }>;
   initialize?(): Promise<void>;
-  prompt(systemPrompt: string, userPrompt: string): Promise<string>;
+  prompt(systemPrompt: string, userPrompt: string, signal?: AbortSignal): Promise<string>;
 }
 
 const CONTEXTUAL_TYPES = new Set<ContextualCategoryType>([
@@ -53,7 +53,7 @@ Types: PERSON (human names), ORGANIZATION (company/client names), ADDRESS (stree
 Return JSON: {"entities":[{"text":"exact substring","type":"PERSON"}]}.
 Return {"entities":[]} if none.`;
 
-const ENTITY_JSON_SCHEMA = {
+export const ENTITY_JSON_SCHEMA = {
   type: 'object',
   properties: {
     entities: {
@@ -238,7 +238,7 @@ export function runLocalHeuristicNer(text: string): LocalAiSpan[] {
 interface ChromeLanguageModelSession {
   prompt: (
     input: string,
-    options?: { responseConstraint?: Record<string, unknown> },
+    options?: { responseConstraint?: Record<string, unknown>; signal?: AbortSignal },
   ) => Promise<string>;
   clone?: () => Promise<ChromeLanguageModelSession>;
   destroy?: () => void;
@@ -252,6 +252,7 @@ interface ChromeLanguageModelApi {
   create: (options?: {
     initialPrompts?: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
     systemPrompt?: string;
+    signal?: AbortSignal;
     expectedInputs?: Array<{ type: string; languages?: string[] }>;
     expectedOutputs?: Array<{ type: string; languages?: string[] }>;
   }) => Promise<ChromeLanguageModelSession>;
@@ -326,26 +327,30 @@ export class ChromeLanguageModelRunner implements OnDeviceRunner {
   private async createSession(
     api: ChromeLanguageModelApi,
     systemPrompt: string,
+    signal?: AbortSignal,
   ): Promise<ChromeLanguageModelSession> {
     try {
       return await api.create({
+        signal,
         initialPrompts: [{ role: 'system', content: systemPrompt }],
         expectedInputs: [{ type: 'text', languages: ['en'] }],
         expectedOutputs: [{ type: 'text', languages: ['en'] }],
       });
     } catch {
+      signal?.throwIfAborted();
       return await api.create({
+        signal,
         systemPrompt,
         expectedOutputs: [{ type: 'text', languages: ['en'] }],
       });
     }
   }
 
-  async prompt(systemPrompt: string, userPrompt: string): Promise<string> {
+  async prompt(systemPrompt: string, userPrompt: string, signal?: AbortSignal): Promise<string> {
     const api = getChromeLanguageModel();
     if (!api) throw new Error('Chrome LanguageModel API is unavailable.');
 
-    const base = this.baseSession ?? (await this.createSession(api, systemPrompt));
+    const base = this.baseSession ?? (await this.createSession(api, systemPrompt, signal));
     const canClone = typeof base.clone === 'function';
     if (canClone) {
       this.baseSession = base;
@@ -354,7 +359,9 @@ export class ChromeLanguageModelRunner implements OnDeviceRunner {
     const session = canClone ? await base.clone!() : base;
 
     try {
+      signal?.throwIfAborted();
       return await session.prompt(userPrompt, {
+        signal,
         responseConstraint: ENTITY_JSON_SCHEMA as unknown as Record<string, unknown>,
       });
     } finally {
@@ -362,6 +369,8 @@ export class ChromeLanguageModelRunner implements OnDeviceRunner {
     }
   }
 }
+
+export const LOCAL_SCAN_TIMEOUT_MS = 45_000;
 
 export interface LocalScannerOptions {
   /**
@@ -427,6 +436,29 @@ export class LocalContextualScanner {
 
   async scan(text: string): Promise<LocalAiScanResult> {
     const started = performance.now();
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<LocalAiScanResult>((resolve) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        resolve({
+          status: 'unavailable',
+          engine: this.runner?.engine ?? 'none',
+          spans: [],
+          reason: 'The on-device scan timed out after 45 seconds. Retry the scan or use an explicitly approved rules-only review.',
+          latencyMs: LOCAL_SCAN_TIMEOUT_MS,
+        });
+      }, LOCAL_SCAN_TIMEOUT_MS);
+    });
+
+    try {
+      return await Promise.race([this.scanLocally(text, started, controller.signal), deadline]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async scanLocally(text: string, started: number, signal: AbortSignal): Promise<LocalAiScanResult> {
     const browserName = await detectBrowserName();
 
     if (!text.trim()) {
@@ -440,6 +472,7 @@ export class LocalContextualScanner {
     }
 
     const status = await this.checkStatus();
+    signal.throwIfAborted();
 
     // Brave / non-Chrome local heuristic path
     if (status.engine === 'local-heuristic') {
@@ -470,9 +503,11 @@ export class LocalContextualScanner {
         await this.runner.initialize();
       }
 
+      signal.throwIfAborted();
       const output = await this.runner.prompt(
         SYSTEM_PROMPT,
         `Text:\n"""\n${text}\n"""`,
+        signal,
       );
       const parsed = parseJsonEntities(output);
       if (!parsed.ok) {
